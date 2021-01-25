@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/WeliHenry/golangblogV1/app/models"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
@@ -13,20 +14,28 @@ import (
 )
 
 // PostCreateBlog is for creating blog
-func PostCreateBlog(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+func CreateBlog(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("content-type", "application/json")
 	blog := models.Blog{}
-	blog.Title = req.FormValue("title")
-	blog.Content = req.FormValue("content")
-	blog.Author = req.FormValue("author")
-	_, err := db.Collection("blogs").InsertOne(context.TODO(), blog)
+	err := json.NewDecoder(req.Body).Decode(&blog)
 	if err != nil {
-		log.Fatal(err)
+		res.WriteHeader(http.StatusBadRequest)
+		res.Write([]byte("Invalid JSON request body "))
+		return
 	}
-	respondJSON(res, http.StatusOK, blog)
+	blog.ID = primitive.NewObjectID().Hex()
+	_, err = db.Collection("blogs").InsertOne(context.TODO(), blog)
+	if err != nil {
+		res.WriteHeader(http.StatusInternalServerError)
+		res.Write([]byte("An error occured while creating blog post ! "))
+		return
+	}
+	json.NewEncoder(res).Encode(blog)
 }
 
 // GetBlogs is for getting all blogs
 func GetBlogs(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("content-type", "application/json")
 	var blogs []*models.Blog
 	cur, err := db.Collection("blogs").Find(context.TODO(), bson.M{}, options.Find())
 	if err != nil {
@@ -44,61 +53,58 @@ func GetBlogs(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
 		log.Fatal(err)
 	}
 	cur.Close(context.TODO())
-
 	respondJSON(res, http.StatusOK, blogs)
 }
 
 // GetBlog is for getting a single blog
 func GetBlog(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("content-type", "application/json")
 	params := mux.Vars(req)
 	blog := models.Blog{}
-	objID, err := primitive.ObjectIDFromHex(params["_id"])
-	if err != nil {
-		log.Fatal(err)
-	}
-	filter := bson.M{"_id": objID}
+	filter := bson.M{"_id": params["_id"]}
 	decoder := db.Collection("blogs").FindOne(context.TODO(), filter)
-	decoder.Decode(&blog)
+	err := decoder.Decode(&blog)
+	if err != nil {
+		res.WriteHeader(http.StatusInternalServerError)
+		res.Write([]byte("An error occured while returning blog post !"))
+		return
+	}
 	respondJSON(res, http.StatusOK, blog)
 }
 
 // DeleteBlog is for deleting a single blog
 func DeleteBlog(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("content-type", "application/json")
 	params := mux.Vars(req)
-	objID, err := primitive.ObjectIDFromHex(params["_id"])
+	filter := bson.M{"_id": params["_id"]}
+	_, err := db.Collection("blogs").DeleteOne(context.TODO(), filter)
 	if err != nil {
-		log.Fatal(err)
+		res.WriteHeader(http.StatusInternalServerError)
+		res.Write([]byte("An error occured while deleting blog post "))
+		return
 	}
-	filter := bson.M{"_id": objID}
-	_, err = db.Collection("blogs").DeleteOne(context.TODO(), filter)
-	if err != nil {
-		log.Fatal(err)
+	deleteResult := models.Response{
+		Message: "Blog deleted successfully",
 	}
-	deleteResult := models.Response{}
-	deleteResult.Message = "Blog deleted successfully"
 	respondJSON(res, http.StatusOK, deleteResult)
 }
 
-// PutUpdateBlog is for updating a single blog
-func PutUpdateBlog(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+//PutUpdateBlog is for updating a single blog
+func UpdateBlogs(db *mongo.Database, res http.ResponseWriter, req *http.Request) {
+	res.Header().Set("content-type", "application/json")
 	params := mux.Vars(req)
 	blog := models.Blog{}
-	blog.Title = req.FormValue("title")
-	blog.Content = req.FormValue("content")
-	blog.Author = req.FormValue("author")
-	objID, err := primitive.ObjectIDFromHex(params["_id"])
+	err := json.NewDecoder(req.Body).Decode(&blog)
 	if err != nil {
-		log.Fatal(err)
+		res.WriteHeader(http.StatusBadRequest)
+		res.Write([]byte("Invalid JSON request body "))
+		return
 	}
-	filter := bson.M{"_id": objID}
-	update := bson.M{"$set": bson.M{
-		"title":   req.FormValue("title"),
-		"content": req.FormValue("content"),
-		"author":  req.FormValue("author"),
-	},
-	}
+	filter := bson.M{"_id": params["_id"]}
+	update := bson.M{"$set": blog}
 	db.Collection("blogs").FindOneAndUpdate(context.TODO(), filter, update)
 	updateResponse := models.Response{}
 	updateResponse.Message = "Blog updated successfully!"
-	respondJSON(res, http.StatusOK, updateResponse)
+	json.NewEncoder(res).Encode(updateResponse)
+
 }

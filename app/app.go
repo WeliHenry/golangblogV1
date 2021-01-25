@@ -30,7 +30,7 @@ func (app *App) Initialize(MongoURI string) {
 	}
 	fmt.Println("Connected to MongoDB!")
 
-	db := client.Database("POST")
+	db := client.Database("GOBLOG")
 	app.DB = db
 
 	app.Router = mux.NewRouter()
@@ -38,11 +38,11 @@ func (app *App) Initialize(MongoURI string) {
 }
 
 func (app *App) setRouters() {
-	app.Post("/api/blogs/create", app.handleRequest(controllers.PostCreateBlog))
-	app.Get("/api/blogs", app.handleRequest(controllers.GetBlogs))
-	app.Get("/api/blog/{_id}", app.handleRequest(controllers.GetBlog))
-	app.Delete("/api/blog/{_id}/delete", app.handleRequest(controllers.DeleteBlog))
-	app.Put("/api/blog/{_id}/update", app.handleRequest(controllers.PutUpdateBlog))
+	app.Post("/api/blogs/", app.handleRequest(controllers.CreateBlog))
+	app.Get("/api/blogs/", app.handleRequest(controllers.GetBlogs))
+	app.Get("/api/blogs/{_id}", app.handleRequest(controllers.GetBlog))
+	app.Put("/api/blogs/{_id}", app.handleRequest(controllers.UpdateBlogs))
+	app.Delete("/api/blogs/{_id}", app.handleRequest(controllers.DeleteBlog))
 }
 
 // Get wraps the router for GET method
